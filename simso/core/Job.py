@@ -273,6 +273,11 @@ class Job(Process):
     def prio(self):
         """Priority. Equivalent to ``self.task.prio``."""
         return self._task.prio
+    
+    @property
+    def sub_prio(self):
+        """sub_priority. Equivalent to ``self.task.sub_prio``."""
+        return self._task.sub_prio
 
     @property
     def deadline(self):

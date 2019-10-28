@@ -281,7 +281,7 @@ class Configuration(object):
                  abort_on_miss=True, period=10, activation_date=0,
                  n_instr=0, mix=0.5, stack_file="", wcet=0, acet=0,
                  et_stddev=0, deadline=10, base_cpi=1.0, followed_by=None,
-                 list_activation_dates=[], preemption_cost=0, data=None, precedence_matrix=None, cpu_map=None, prio=None):
+                 list_activation_dates=[], preemption_cost=0, data=None, precedence_matrix=None, cpu_map=None, prio=None, sub_prio=None):
         """
         Helper method to create a TaskInfo and add it to the list of tasks.
         """
@@ -292,7 +292,7 @@ class Configuration(object):
                         activation_date, n_instr, mix,
                         (stack_file, self.cur_dir), wcet, acet, et_stddev,
                         deadline, base_cpi, followed_by, list_activation_dates,
-                        preemption_cost, data, precedence_matrix, cpu_map, prio)
+                        preemption_cost, data, precedence_matrix, cpu_map, prio, sub_prio)
         self.task_info_list.append(task)
         return task
 

@@ -21,7 +21,7 @@ class TaskInfo(object):
     def __init__(self, name, identifier, task_type, abort_on_miss, period,
                  activation_date, n_instr, mix, stack_file, wcet, acet,
                  et_stddev, deadline, base_cpi, followed_by,
-                 list_activation_dates, preemption_cost, data, precedence_matrix, cpu_map, prio,
+                 list_activation_dates, preemption_cost, data, precedence_matrix, cpu_map, prio, sub_prio,
                  source_subtask=False, subtask_nbr=None, succ=None, parent_task=None):
         """
         :type name: str
@@ -78,6 +78,7 @@ class TaskInfo(object):
         self.parent_task = parent_task
         self.cpu_map = cpu_map
         self.prio = prio
+        self.sub_prio = sub_prio
 
     @property
     def csdp(self):
@@ -237,6 +238,13 @@ class GenericTask(Process):
         Priority of the task.
         """
         return self._task_info.prio
+
+    @property
+    def sub_prio(self):
+        """
+        sub_priority of the task.
+        """
+        return self._task_info.sub_prio
     
     @property
     def precedence_matrix(self):
@@ -376,7 +384,7 @@ class DAGTask(GenericTask):
                         activation_date=self._task_info.activation_date, n_instr=0, mix=0.5,
                         stack_file=("",""), wcet=self.wcet[subtask], acet=0, et_stddev=0,
                         deadline=self.deadline, base_cpi=1.0, followed_by=None, list_activation_dates=[],
-                        preemption_cost=0, data=None, precedence_matrix=None, cpu_map=self._task_info.cpu_map[subtask], prio=self._task_info.prio,
+                        preemption_cost=0, data=None, precedence_matrix=None, cpu_map=self._task_info.cpu_map[subtask], prio=self._task_info.prio, sub_prio=self._task_info.sub_prio[subtask],
                         source_subtask=False, subtask_nbr=subtask, succ=succ, parent_task=self)
             
             # subtask with no predecessor

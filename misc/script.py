@@ -40,12 +40,15 @@ def main(argv):
 
         T1 = 40 
         T2 = 50 
+
+        sub_prio1=[1,2]
+        sub_prio2=[1,3,4,5,2,6]
         
         # Add tasks:
         configuration.add_task(name="T1", identifier=1, task_type="DAG", period=T1,
-        activation_date=0, wcet=c1, deadline=T1, precedence_matrix=g1, cpu_map=p1,prio=1)
+        activation_date=0, wcet=c1, deadline=T1, precedence_matrix=g1, cpu_map=p1,prio=1, sub_prio=sub_prio1)
         configuration.add_task(name="T2", identifier=2, task_type="DAG", period=T2,
-        activation_date=0, wcet=c2, deadline=T2, precedence_matrix=g2, cpu_map=p2,prio=2)
+        activation_date=0, wcet=c2, deadline=T2, precedence_matrix=g2, cpu_map=p2,prio=2, sub_prio=sub_prio2)
         
         
         # Add a processor:
@@ -53,7 +56,7 @@ def main(argv):
         configuration.add_processor(name="CPU 2", identifier=2)
         
         # Add a scheduler:
-        configuration.scheduler_info.clas = "simso.schedulers.P_FP"
+        configuration.scheduler_info.clas = "simso.schedulers.P_FP_sub"
         
         # Check the config before trying to run it.
         configuration.check_all()

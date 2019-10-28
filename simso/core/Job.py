@@ -270,6 +270,11 @@ class Job(Process):
         return self._task.period
 
     @property
+    def prio(self):
+        """Priority. Equivalent to ``self.task.prio``."""
+        return self._task.prio
+
+    @property
     def deadline(self):
         """
         Relative deadline in milliseconds.

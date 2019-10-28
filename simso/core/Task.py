@@ -2,6 +2,7 @@
 
 from collections import deque
 from SimPy.Simulation import Process, Monitor, hold, passivate
+import numpy as np
 from simso.core.Job import Job
 from simso.core.Timer import Timer
 from .CSDP import CSDP
@@ -20,7 +21,8 @@ class TaskInfo(object):
     def __init__(self, name, identifier, task_type, abort_on_miss, period,
                  activation_date, n_instr, mix, stack_file, wcet, acet,
                  et_stddev, deadline, base_cpi, followed_by,
-                 list_activation_dates, preemption_cost, data):
+                 list_activation_dates, preemption_cost, data, precedence_matrix, cpu_map, prio,
+                 source_subtask=False, subtask_nbr=None, succ=None, parent_task=None):
         """
         :type name: str
         :type identifier: int
@@ -40,6 +42,13 @@ class TaskInfo(object):
         :type list_activation_dates: list
         :type preemption_cost: int
         :type data: dict
+        :type precedence_matrix: np.ndarray
+        :type cpu_map: list
+        :type prio: int
+        type source_subtask: bool
+        type subtask_nbr: int
+        type succ: list
+        type parent_task: list
         """
         self.name = name
         self.identifier = identifier
@@ -62,6 +71,13 @@ class TaskInfo(object):
         self.list_activation_dates = list_activation_dates
         self.data = data
         self.preemption_cost = preemption_cost
+        self.precedence_matrix = precedence_matrix
+        self.source_subtask = source_subtask
+        self.subtask_nbr = subtask_nbr
+        self.succ = succ
+        self.parent_task = parent_task
+        self.cpu_map = cpu_map
+        self.prio = prio
 
     @property
     def csdp(self):
@@ -216,6 +232,20 @@ class GenericTask(Process):
         return self._task_info.period
 
     @property
+    def prio(self):
+        """
+        Priority of the task.
+        """
+        return self._task_info.prio
+    
+    @property
+    def precedence_matrix(self):
+        """
+        Precedence constraint of the task.
+        """
+        return self._task_info.precedence_matrix
+
+    @property
     def identifier(self):
         """
         Identifier of the task.
@@ -320,6 +350,98 @@ class PTask(GenericTask):
             self.create_job()
             yield hold, self, int(self.period * self._sim.cycles_per_ms)
 
+class DAGTask(GenericTask):
+    """
+    DAG Task process. Inherits from :class:`GenericTask`. Create 
+    sub-tasks with dependencies between them.
+    """
+    fields = ['activation_date', 'period', 'deadline', 'wcet']
+    
+    
+    def __init__(self, sim, task_info):
+        GenericTask.__init__(self, sim, task_info)
+        #self._job_count = []  
+        self.finished_subtask = []
+        self.subtask_instances = []
+        if self.precedence_matrix is None:
+            n_subtask = 0
+        else:
+            n_subtask = self.precedence_matrix.shape[0]
+            
+        self.finished_subtask = [0] * n_subtask
+        
+        for subtask in range(n_subtask):
+            succ = np.nonzero(self.precedence_matrix[subtask,:])[0]
+            task_info = TaskInfo(name="{},{}".format(self.name, subtask), identifier=self.identifier*100+subtask, task_type="subtask", abort_on_miss=True, period=self.period,
+                        activation_date=self._task_info.activation_date, n_instr=0, mix=0.5,
+                        stack_file=("",""), wcet=self.wcet[subtask], acet=0, et_stddev=0,
+                        deadline=self.deadline, base_cpi=1.0, followed_by=None, list_activation_dates=[],
+                        preemption_cost=0, data=None, precedence_matrix=None, cpu_map=self._task_info.cpu_map[subtask], prio=self._task_info.prio,
+                        source_subtask=False, subtask_nbr=subtask, succ=succ, parent_task=self)
+            
+            # subtask with no predecessor
+            if np.array_equal(self.precedence_matrix[:,subtask], np.zeros(n_subtask)):
+                task_info.source_subtask=True
+                
+            subtask_instance = Task(self.sim, task_info)
+            self.sim._task_list.append(subtask_instance)
+            self.subtask_instances.append(subtask_instance)
+        
+
+    def execute(self):
+        # wait the activation date.
+        self.sim._task_list.remove(self)
+        yield passivate, self
+
+       
+class SubTask(DAGTask):
+    """
+    Sub-Task process. Inherits from :class:`DAGTask`. Source jobs are
+    created periodically. Other sub-tasks are released when all 
+    predecessor finish their execution
+    """
+    fields = ['activation_date', 'period', 'deadline', 'wcet']
+    
+    
+    def __init__(self, sim, task_info):
+        GenericTask.__init__(self, sim, task_info)
+        
+    def activate_successor(self, successors):
+        for subtask in successors:
+            if(np.nonzero(np.array(self._task_info.parent_task.finished_subtask)[self._task_info.parent_task.precedence_matrix[:,subtask]==1]==0)[0].shape[0]==0):
+                self._task_info.parent_task.subtask_instances[subtask].create_job()
+
+    def end_job(self, job):
+        #print(self.sim._task_list)_task_list
+        
+        self._last_cpu = self.cpu
+        self._task_info.parent_task.finished_subtask[job.task._task_info.subtask_nbr] = 1
+        
+        # activate successor  
+        self.activate_successor(job.task._task_info.succ) # pred represent succ
+
+        if len(self._activations_fifo) > 0:
+            self._activations_fifo.popleft()
+        if len(self._activations_fifo) > 0:
+            self.job = self._activations_fifo[0]
+            self.sim.activate(self.job, self.job.activate_job())
+
+            
+            
+    def execute(self):
+        self._init()
+        # wait the activation date.
+        if (self._task_info.source_subtask):
+            yield hold, self, int(self._task_info.activation_date *
+                              self._sim.cycles_per_ms)
+
+            while True:
+                self._task_info.parent_task.finished_subtask = [0] * len(self._task_info.parent_task.finished_subtask)
+                self.create_job()
+                yield hold, self, int(self.period * self._sim.cycles_per_ms)
+        else:
+            yield passivate, self
+
 
 class SporadicTask(GenericTask):
     """
@@ -343,6 +465,8 @@ class SporadicTask(GenericTask):
 
 task_types = {
     "Periodic": PTask,
+    "DAG": DAGTask,
+    "subtask": SubTask,
     "APeriodic": ATask,
     "Sporadic": SporadicTask
 }
